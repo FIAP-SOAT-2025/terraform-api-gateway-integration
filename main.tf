@@ -115,3 +115,31 @@ resource "aws_apigatewayv2_route" "swagger_ui_assets" {
   route_key = "GET /api/{proxy+}"
   target    = "integrations/${aws_apigatewayv2_integration.lanchonete_integration.id}"
 }
+
+# Rota específica para buscar order por ID
+resource "aws_apigatewayv2_route" "get_order_by_id" {
+  api_id    = data.terraform_remote_state.infra.outputs.api_gateway_id
+  route_key = "GET /order/{id}"
+  target    = "integrations/${aws_apigatewayv2_integration.lanchonete_integration.id}"
+}
+
+# Rota específica para criar order 
+resource "aws_apigatewayv2_route" "create_order" {
+  api_id    = data.terraform_remote_state.infra.outputs.api_gateway_id
+  route_key = "POST /order"
+  target    = "integrations/${aws_apigatewayv2_integration.lanchonete_integration.id}"
+}
+
+# Rota específica para buscar todas as ordens 
+resource "aws_apigatewayv2_route" "get_all_order" {
+  api_id    = data.terraform_remote_state.infra.outputs.api_gateway_id
+  route_key = "GET /order"
+  target    = "integrations/${aws_apigatewayv2_integration.lanchonete_integration.id}"
+}
+
+# Rota específica para alterar status order
+resource "aws_apigatewayv2_route" "update_status_order" {
+  api_id    = data.terraform_remote_state.infra.outputs.api_gateway_id
+  route_key = "Patch /order/:id/status"
+  target    = "integrations/${aws_apigatewayv2_integration.lanchonete_integration.id}"
+}

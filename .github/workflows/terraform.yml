@@ -1,0 +1,139 @@
+name: "API Gateway Integration Deploy"
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Selecione a ação que deseja executar'
+        required: true
+        type: choice
+        options:
+        - deploy
+        - destroy
+        default: 'deploy'
+  push:
+    branches:
+      - main
+    paths:
+      - '*.tf'
+      - '.github/workflows/terraform.yml'
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: 1.6.0
+
+jobs:
+  deploy:
+    name: 'Terraform Deploy'
+    if: github.event.inputs.action == 'deploy' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./
+    environment: production
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+          
+      - name: Check AWS Credentials
+        run: aws sts get-caller-identity
+
+      - name: Verify Dependencies
+        run: |
+          echo "Checking if required resources exist..."
+          
+          # Check if API Gateway exists (from terraform-infra)
+          API_GATEWAY_ID=$(aws apigatewayv2 get-apis --query "Items[?Name=='http-api-lanchonete-v1'].ApiId" --output text)
+          if [ -z "$API_GATEWAY_ID" ]; then
+            echo "❌ API Gateway not found! Deploy terraform-infra first."
+            exit 1
+          fi
+          echo "✅ API Gateway found: $API_GATEWAY_ID"
+          
+          # Check if VPC Link exists
+          VPC_LINK=$(aws apigatewayv2 get-vpc-links --query "Items[?Name=='vpc-link-lanchonete-v1'].VpcLinkId" --output text)
+          if [ -z "$VPC_LINK" ]; then
+            echo "❌ VPC Link not found! Deploy terraform-infra first."
+            exit 1
+          fi
+          echo "✅ VPC Link found: $VPC_LINK"
+          
+          echo "✅ All dependencies verified"
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform Validate
+        run: terraform validate -no-color
+
+      - name: Terraform Plan
+        run: terraform plan -no-color -input=false -out=tfplan
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' || github.event.inputs.action == 'deploy'
+        run: terraform apply -auto-approve -input=false tfplan
+
+      - name: Get API Gateway URL
+        if: github.ref == 'refs/heads/main' || github.event.inputs.action == 'deploy'
+        run: |
+          echo "=== API Gateway Configuration ==="
+          terraform output -json | jq '.'
+          
+          API_URL=$(terraform output -raw api_gateway_invoke_url 2>/dev/null || echo "Not available")
+          echo ""
+          echo "🌐 API Gateway URL: $API_URL"
+          echo ""
+          echo "✅ API Gateway integration configured successfully!"
+
+  destroy:
+    name: 'Terraform Destroy'
+    if: github.event.inputs.action == 'destroy'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+          
+      - name: Check AWS Credentials
+        run: aws sts get-caller-identity
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve -input=false
+
+      - name: Destroy Complete
+        run: echo "🗑️ API Gateway integration destroyed successfully"
