@@ -8,10 +8,10 @@ output "api_gateway_id" {
 #   value       = data.terraform_remote_state.api.outputs.api_load_balancer_hostname
 # }
 
-output "integration_id" {
-  description = "ID da integração criada."
-  value       = aws_apigatewayv2_integration.lanchonete_integration.id
-}
+# output "integration_id" {
+#   description = "ID da integração criada."
+#   value       = aws_apigatewayv2_integration.lanchonete_integration.id
+# }
 
 output "api_gateway_invoke_url" {
   description = "URL de invocação do API Gateway (do módulo de infraestrutura)."
